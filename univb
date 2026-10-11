@@ -1,5 +1,5 @@
 -- language: Luau, environment: Roblox Executor, target: Roblox Client
--- br??univ | Suite with Reversible Boost FPS & Mobile AimLock Button
+-- br??univ | Suite with Anti Fall Damage, Mobile Aim, Reversible Boost FPS & Notifications
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -49,7 +49,8 @@ local MovementState = {
     FlyEnabled = false,
     FlySpeedValue = 50,
     FlyBind = Enum.KeyCode.F,
-    NoClipEnabled = false
+    NoClipEnabled = false,
+    AntiFallDamage = false
 }
 
 local PerformanceState = {
@@ -142,7 +143,7 @@ ScreenGui.ResetOnSpawn = false
 pcall(function() ScreenGui.Parent = CoreGui end)
 if not ScreenGui.Parent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
--- MOBILE AIM LOCK BUTTON (Rectangular & Compact)
+-- MOBILE AIM LOCK BUTTON
 local MobileAimBtn = Instance.new("TextButton")
 MobileAimBtn.Name = "MobileAimButton"
 MobileAimBtn.Size = UDim2.new(0, 80, 0, 36)
@@ -748,6 +749,10 @@ AddToggle(MovementPage, "NoClip", MovementState.NoClipEnabled, function(v)
     MovementState.NoClipEnabled = v
 end)
 
+AddToggle(MovementPage, "Anti Fall Damage", MovementState.AntiFallDamage, function(v)
+    MovementState.AntiFallDamage = v
+end)
+
 UIS.InputBegan:Connect(function(input, gpe)
     if listeningForAimBind and input.UserInputType == Enum.UserInputType.Keyboard then
         CombatState.Bind = input.KeyCode
@@ -1048,7 +1053,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 --------------------------------------------------
--- MOVEMENT PHYSICS LOOP
+-- MOVEMENT PHYSICS LOOP & ANTI FALL DAMAGE
 --------------------------------------------------
 RunService.Stepped:Connect(function()
     local myChar = LocalPlayer.Character
@@ -1070,6 +1075,20 @@ RunService.Stepped:Connect(function()
         for _, part in ipairs(myChar:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.CanCollide = false
+            end
+        end
+    end
+
+    -- Anti Fall Damage Logic
+    if MovementState.AntiFallDamage and hrp then
+        local velY = hrp.Velocity.Y
+        if velY < -50 then
+            local rayParams = RaycastParams.new()
+            rayParams.FilterType = Enum.RaycastFilterType.Exclude
+            rayParams.FilterDescendantsInstances = {myChar}
+            local result = workspace:Raycast(hrp.Position, Vector3.new(0, -8, 0), rayParams)
+            if result then
+                hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
             end
         end
     end
