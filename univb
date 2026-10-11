@@ -1,5 +1,5 @@
 -- language: Luau, environment: Roblox Executor, target: Roblox Client
--- br??univ | Suite with Fixed Anti Fall Damage, Mobile Aim, Reversible Boost FPS & Notifications
+-- br??univ | Universal Suite with Fullscreen Dark Keybind Prompt
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -9,6 +9,7 @@ local UIS = game:GetService("UserInputService")
 local StatsService = game:GetService("Stats")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui = game:GetService("CoreGui")
 
 --------------------------------------------------
@@ -16,13 +17,13 @@ local CoreGui = game:GetService("CoreGui")
 --------------------------------------------------
 local CombatState = {
     Enabled = false,
+    Mode = "Toggle", -- "Hold" or "Toggle"
     TeamCheck = false,
     WallCheck = false,
     ShowDistance = false,
     ShowVisuals = false,
     FOV = 360,
     MaxRange = 1000,
-    Bind = Enum.KeyCode.E,
     TargetPart = "Head",
     CurrentTarget = nil
 }
@@ -36,9 +37,13 @@ local ESPState = {
     Health = false,
     Tracers = false,
     ChinaHat = false,
+    Aspect43 = false,
+    DarkSky = false,
     FOVValue = 120,
     FullBright = false,
-    BoostFPS = false
+    BoostFPS = false,
+    ArrayList = false,
+    Watermark = false
 }
 
 local MovementState = {
@@ -48,7 +53,6 @@ local MovementState = {
     JumpPowerValue = 50,
     FlyEnabled = false,
     FlySpeedValue = 50,
-    FlyBind = Enum.KeyCode.F,
     NoClipEnabled = false,
     AntiFallDamage = false
 }
@@ -56,6 +60,21 @@ local MovementState = {
 local PerformanceState = {
     MiniUIEnabled = false
 }
+
+-- BINDS CONFIGURATION
+local Binds = {
+    AimLock = Enum.KeyCode.E,
+    WalkSpeed = Enum.KeyCode.Unknown,
+    JumpBoost = Enum.KeyCode.Unknown,
+    Fly = Enum.KeyCode.F,
+    NoClip = Enum.KeyCode.Unknown,
+    AntiFallDamage = Enum.KeyCode.Unknown,
+    BoostFPS = Enum.KeyCode.Unknown,
+    MiniUI = Enum.KeyCode.Unknown,
+    MenuGUI = Enum.KeyCode.K
+}
+
+local FeatureRegistry = {}
 
 local ESPDrawings = {}
 local ChamsHighlights = {}
@@ -70,6 +89,8 @@ local OriginalLighting = {
     GlobalShadows = Lighting.GlobalShadows,
     Ambient = Lighting.Ambient
 }
+
+local isDarkTheme = true
 
 --------------------------------------------------
 -- DRAGGABLE UTILITY FUNCTION
@@ -139,9 +160,198 @@ HeadDot.Visible = false
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "BrUnivSuiteHUD"
 ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.DisplayOrder = 99999
 
 pcall(function() ScreenGui.Parent = CoreGui end)
 if not ScreenGui.Parent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+-- FIXED WATERMARK (TOP CENTER)
+local WatermarkFrame = Instance.new("Frame")
+WatermarkFrame.Name = "WatermarkFrame"
+WatermarkFrame.Size = UDim2.new(0, 190, 0, 28)
+WatermarkFrame.Position = UDim2.new(0.5, -95, 0, 12)
+WatermarkFrame.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
+WatermarkFrame.BorderSizePixel = 0
+WatermarkFrame.Visible = false
+WatermarkFrame.Parent = ScreenGui
+
+local WatermarkCorner = Instance.new("UICorner")
+WatermarkCorner.CornerRadius = UDim.new(1, 0)
+WatermarkCorner.Parent = WatermarkFrame
+
+local WatermarkStroke = Instance.new("UIStroke")
+WatermarkStroke.Color = Color3.fromRGB(50, 50, 50)
+WatermarkStroke.Thickness = 1.2
+WatermarkStroke.Parent = WatermarkFrame
+
+local WatermarkText = Instance.new("TextLabel")
+WatermarkText.Size = UDim2.new(1, -30, 1, 0)
+WatermarkText.Position = UDim2.new(0, 10, 0, 0)
+WatermarkText.BackgroundTransparency = 1
+WatermarkText.Text = "br?? universal"
+WatermarkText.TextColor3 = Color3.fromRGB(230, 230, 230)
+WatermarkText.Font = Enum.Font.GothamBold
+WatermarkText.TextSize = 11
+WatermarkText.TextXAlignment = Enum.TextXAlignment.Left
+WatermarkText.Parent = WatermarkFrame
+
+local WatermarkImage = Instance.new("ImageLabel")
+WatermarkImage.Name = "WatermarkIcon"
+WatermarkImage.Size = UDim2.new(0, 20, 0, 20)
+WatermarkImage.Position = UDim2.new(1, -24, 0.5, -10)
+WatermarkImage.BackgroundTransparency = 1
+WatermarkImage.ScaleType = Enum.ScaleType.Fit
+WatermarkImage.Parent = WatermarkFrame
+
+-- FULLSCREEN DARK KEYBIND PROMPT OVERLAY
+local BindOverlay = Instance.new("Frame")
+BindOverlay.Name = "BindOverlay"
+BindOverlay.Size = UDim2.new(1, 0, 1, 0)
+BindOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+BindOverlay.BackgroundTransparency = 1
+BindOverlay.Visible = false
+BindOverlay.ZIndex = 500
+BindOverlay.Parent = ScreenGui
+
+local BindPromptBox = Instance.new("Frame")
+BindPromptBox.Size = UDim2.new(0, 340, 0, 120)
+BindPromptBox.Position = UDim2.new(0.5, -170, 0.5, -60)
+BindPromptBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+BindPromptBox.BorderSizePixel = 0
+BindPromptBox.ZIndex = 501
+BindPromptBox.Parent = BindOverlay
+
+local BindPromptCorner = Instance.new("UICorner")
+BindPromptCorner.CornerRadius = UDim.new(0, 10)
+BindPromptCorner.Parent = BindPromptBox
+
+local BindPromptStroke = Instance.new("UIStroke")
+BindPromptStroke.Color = Color3.fromRGB(70, 70, 70)
+BindPromptStroke.Thickness = 1.5
+BindPromptStroke.Parent = BindPromptBox
+
+local BindPromptTitle = Instance.new("TextLabel")
+BindPromptTitle.Size = UDim2.new(1, 0, 0, 45)
+BindPromptTitle.Position = UDim2.new(0, 0, 0, 15)
+BindPromptTitle.BackgroundTransparency = 1
+BindPromptTitle.Text = "PRESS ANY KEY TO BIND..."
+BindPromptTitle.TextColor3 = Color3.fromRGB(240, 240, 240)
+BindPromptTitle.Font = Enum.Font.GothamBold
+BindPromptTitle.TextSize = 16
+BindPromptTitle.ZIndex = 502
+BindPromptTitle.Parent = BindPromptBox
+
+local BindPromptSub = Instance.new("TextLabel")
+BindPromptSub.Size = UDim2.new(1, -20, 0, 35)
+BindPromptSub.Position = UDim2.new(0, 10, 0, 65)
+BindPromptSub.BackgroundTransparency = 1
+BindPromptSub.Text = "Target: [ Feature Name ]"
+BindPromptSub.TextColor3 = Color3.fromRGB(170, 170, 170)
+BindPromptSub.Font = Enum.Font.Gotham
+BindPromptSub.TextSize = 13
+BindPromptSub.ZIndex = 502
+BindPromptSub.Parent = BindPromptBox
+
+-- ARRAYLIST CONTAINER (TOP RIGHT)
+local ArrayListContainer = Instance.new("Frame")
+ArrayListContainer.Name = "ArrayListContainer"
+ArrayListContainer.Size = UDim2.new(0, 180, 0, 400)
+ArrayListContainer.Position = UDim2.new(1, -190, 0, 15)
+ArrayListContainer.BackgroundTransparency = 1
+ArrayListContainer.Visible = false
+ArrayListContainer.Parent = ScreenGui
+
+local ArrayListLayout = Instance.new("UIListLayout")
+ArrayListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ArrayListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+ArrayListLayout.Padding = UDim.new(0, 4)
+ArrayListLayout.Parent = ArrayListContainer
+
+local ArrayListCards = {}
+
+local function UpdateArrayList()
+    if not ESPState.ArrayList then
+        ArrayListContainer.Visible = false
+        return
+    end
+    ArrayListContainer.Visible = true
+
+    local activeFeatures = {
+        {Name = "Aim Lock", Active = CombatState.Enabled},
+        {Name = "Walk Speed", Active = MovementState.WalkSpeedEnabled},
+        {Name = "Jump Boost", Active = MovementState.JumpBoostEnabled},
+        {Name = "Fly", Active = MovementState.FlyEnabled},
+        {Name = "NoClip", Active = MovementState.NoClipEnabled},
+        {Name = "Anti Fall Damage", Active = MovementState.AntiFallDamage},
+        {Name = "Boost FPS", Active = ESPState.BoostFPS},
+        {Name = "Mini UI", Active = PerformanceState.MiniUIEnabled}
+    }
+
+    for _, feat in ipairs(activeFeatures) do
+        local existing = ArrayListCards[feat.Name]
+        if feat.Active then
+            if not existing then
+                local card = Instance.new("Frame")
+                card.Size = UDim2.new(0, 0, 0, 26)
+                card.BackgroundColor3 = isDarkTheme and Color3.fromRGB(8, 8, 8) or Color3.fromRGB(235, 235, 235)
+                card.BackgroundTransparency = 1
+                card.BorderSizePixel = 0
+                card.Parent = ArrayListContainer
+
+                local corner = Instance.new("UICorner")
+                corner.CornerRadius = UDim.new(0, 6)
+                corner.Parent = card
+
+                local stroke = Instance.new("UIStroke")
+                stroke.Color = isDarkTheme and Color3.fromRGB(45, 45, 45) or Color3.fromRGB(200, 200, 200)
+                stroke.Transparency = 1
+                stroke.Thickness = 1.2
+                stroke.Parent = card
+
+                local label = Instance.new("TextLabel")
+                label.Size = UDim2.new(1, -12, 1, 0)
+                label.Position = UDim2.new(0, 6, 0, 0)
+                label.BackgroundTransparency = 1
+                label.Text = feat.Name
+                label.TextColor3 = isDarkTheme and Color3.fromRGB(230, 230, 230) or Color3.fromRGB(20, 20, 20)
+                label.TextTransparency = 1
+                label.Font = Enum.Font.GothamMedium
+                label.TextSize = 10.5
+                label.TextXAlignment = Enum.TextXAlignment.Right
+                label.Parent = card
+
+                ArrayListCards[feat.Name] = card
+
+                TweenService:Create(card, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Size = UDim2.new(0, 140, 0, 26),
+                    BackgroundTransparency = isDarkTheme and 0.15 or 0.1
+                }):Play()
+                TweenService:Create(stroke, TweenInfo.new(0.3), {Transparency = 0.3}):Play()
+                TweenService:Create(label, TweenInfo.new(0.3), {TextTransparency = 0}):Play()
+            end
+        else
+            if existing then
+                ArrayListCards[feat.Name] = nil
+                local card = existing
+                local stroke = card:FindFirstChildOfClass("UIStroke")
+                local label = card:FindFirstChildOfClass("TextLabel")
+
+                local tw1 = TweenService:Create(card, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+                    Size = UDim2.new(0, 0, 0, 26),
+                    BackgroundTransparency = 1
+                })
+                if stroke then TweenService:Create(stroke, TweenInfo.new(0.25), {Transparency = 1}):Play() end
+                if label then TweenService:Create(label, TweenInfo.new(0.25), {TextTransparency = 1}):Play() end
+
+                tw1:Play()
+                tw1.Completed:Connect(function()
+                    card:Destroy()
+                end)
+            end
+        end
+    end
+end
 
 -- MOBILE AIM LOCK BUTTON
 local MobileAimBtn = Instance.new("TextButton")
@@ -151,7 +361,7 @@ MobileAimBtn.Position = UDim2.new(0, 15, 0.52, 0)
 MobileAimBtn.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
 MobileAimBtn.BorderSizePixel = 0
 MobileAimBtn.Text = "AIM: OFF"
-MobileAimBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
+MobileAimBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
 MobileAimBtn.Font = Enum.Font.GothamBold
 MobileAimBtn.TextSize = 11
 MobileAimBtn.Active = true
@@ -160,15 +370,15 @@ MobileAimBtn.Parent = ScreenGui
 MakeDraggable(MobileAimBtn)
 
 local MobileAimStroke = Instance.new("UIStroke")
-MobileAimStroke.Color = Color3.fromRGB(220, 80, 80)
-MobileAimStroke.Thickness = 1.5
+MobileAimStroke.Color = Color3.fromRGB(50, 50, 50)
+MobileAimStroke.Thickness = 1.2
 MobileAimStroke.Parent = MobileAimBtn
 
 local MobileAimCorner = Instance.new("UICorner")
 MobileAimCorner.CornerRadius = UDim.new(0, 6)
 MobileAimCorner.Parent = MobileAimBtn
 
--- NOTIFICATION CONTAINER (Bottom Right)
+-- NOTIFICATION CONTAINER
 local NotifContainer = Instance.new("Frame")
 NotifContainer.Name = "NotifContainer"
 NotifContainer.Size = UDim2.new(0, 220, 0, 300)
@@ -203,8 +413,8 @@ local function Notify(featureName, state)
     label.Size = UDim2.new(1, -10, 1, 0)
     label.Position = UDim2.new(0, 10, 0, 0)
     label.BackgroundTransparency = 1
-    label.Text = featureName .. " : " .. (state and "ON" or "OFF")
-    label.TextColor3 = state and Color3.fromRGB(120, 255, 150) or Color3.fromRGB(255, 120, 120)
+    label.Text = featureName .. " : " .. (type(state) == "boolean" and (state and "ON" or "OFF") or tostring(state))
+    label.TextColor3 = Color3.fromRGB(220, 220, 220)
     label.Font = Enum.Font.GothamBold
     label.TextSize = 11
     label.TextXAlignment = Enum.TextXAlignment.Left
@@ -232,7 +442,7 @@ local function Notify(featureName, state)
     end)
 end
 
--- LOADING SCREEN (hello?)
+-- LOADING SCREEN
 local LoadingFrame = Instance.new("Frame")
 LoadingFrame.Name = "LoadingFrame"
 LoadingFrame.Size = UDim2.new(0, 220, 0, 70)
@@ -310,7 +520,7 @@ MainStroke.Parent = MainFrame
 
 -- Top Bar Title
 local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(1, -20, 0, 35)
+TitleLabel.Size = UDim2.new(1, -78, 0, 35)
 TitleLabel.Position = UDim2.new(0, 10, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Text = "■ br??univ"
@@ -321,13 +531,46 @@ TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.TextTransparency = 1
 TitleLabel.Parent = MainFrame
 
+-- Top Right Header Image
+local HeaderImage = Instance.new("ImageLabel")
+HeaderImage.Name = "HeaderIcon"
+HeaderImage.Size = UDim2.new(0, 26, 0, 26)
+HeaderImage.Position = UDim2.new(1, -34, 0, 5)
+HeaderImage.BackgroundTransparency = 1
+HeaderImage.Parent = MainFrame
+
+-- THEME TOGGLE BUTTON (w / b)
+local ThemeToggleBtn = Instance.new("TextButton")
+ThemeToggleBtn.Name = "ThemeToggleButton"
+ThemeToggleBtn.Size = UDim2.new(0, 26, 0, 26)
+ThemeToggleBtn.Position = UDim2.new(1, -66, 0, 5)
+ThemeToggleBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+ThemeToggleBtn.BorderSizePixel = 0
+ThemeToggleBtn.Text = "w"
+ThemeToggleBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+ThemeToggleBtn.Font = Enum.Font.GothamBold
+ThemeToggleBtn.TextSize = 12
+ThemeToggleBtn.Parent = MainFrame
+
+local ThemeCorner = Instance.new("UICorner")
+ThemeCorner.CornerRadius = UDim.new(0, 4)
+ThemeCorner.Parent = ThemeToggleBtn
+
+local ThemeStroke = Instance.new("UIStroke")
+ThemeStroke.Color = Color3.fromRGB(50, 50, 50)
+ThemeStroke.Thickness = 1
+ThemeStroke.Parent = ThemeToggleBtn
+
 -- Tab Navigation Sidebar
-local TabBar = Instance.new("Frame")
+local TabBar = Instance.new("ScrollingFrame")
 TabBar.Size = UDim2.new(0, 120, 1, -45)
 TabBar.Position = UDim2.new(0, 5, 0, 40)
 TabBar.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
 TabBar.BorderSizePixel = 0
 TabBar.BackgroundTransparency = 1
+TabBar.ScrollBarThickness = 0
+TabBar.CanvasSize = UDim2.new(0, 0, 0, 0)
+TabBar.AutomaticCanvasSize = Enum.AutomaticSize.Y
 TabBar.Parent = MainFrame
 
 local TabListLayout = Instance.new("UIListLayout")
@@ -345,10 +588,11 @@ ContentContainer.BackgroundTransparency = 1
 ContentContainer.Parent = MainFrame
 
 local Pages = {}
+local TabButtons = {}
 
 local function CreateTab(name)
     local tabBtn = Instance.new("TextButton")
-    tabBtn.Size = UDim2.new(1, 0, 0, 32)
+    tabBtn.Size = UDim2.new(1, -4, 0, 32)
     tabBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
     tabBtn.BorderSizePixel = 0
     tabBtn.Text = name
@@ -373,18 +617,17 @@ local function CreateTab(name)
     layout.Parent = page
 
     Pages[name] = page
+    TabButtons[name] = tabBtn
 
     tabBtn.MouseButton1Click:Connect(function()
         for _, p in pairs(Pages) do p.Visible = false end
-        for _, b in ipairs(TabBar:GetChildren()) do
-            if b:IsA("TextButton") then
-                b.TextColor3 = Color3.fromRGB(160, 160, 160)
-                b.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-            end
+        for _, b in pairs(TabButtons) do
+            b.TextColor3 = isDarkTheme and Color3.fromRGB(160, 160, 160) or Color3.fromRGB(90, 90, 90)
+            b.BackgroundColor3 = isDarkTheme and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(225, 225, 225)
         end
         page.Visible = true
-        tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        tabBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        tabBtn.TextColor3 = isDarkTheme and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(10, 10, 10)
+        tabBtn.BackgroundColor3 = isDarkTheme and Color3.fromRGB(25, 25, 25) or Color3.fromRGB(200, 200, 200)
     end)
 
     return page
@@ -394,9 +637,11 @@ local CombatPage = CreateTab("Combat")
 local TrackingPage = CreateTab("Tracking")
 local MovementPage = CreateTab("Movement")
 local ESPPage = CreateTab("ESP")
+local VisualsPage = CreateTab("Visuals")
 local PerformancePage = CreateTab("Performance")
 local TeleportPage = CreateTab("Teleport")
-local InfoPage = CreateTab("Info")
+local BindsPage = CreateTab("Binds")
+local SettingsPage = CreateTab("Settings")
 
 CombatPage.Visible = true
 
@@ -405,7 +650,7 @@ CombatPage.Visible = true
 --------------------------------------------------
 local MiniUIFrame = Instance.new("Frame")
 MiniUIFrame.Name = "MiniUIBarabaka"
-MiniUIFrame.Size = UDim2.new(0, 190, 0, 125)
+MiniUIFrame.Size = UDim2.new(0, 165, 0, 95)
 MiniUIFrame.Position = UDim2.new(0, 20, 0.1, 0)
 MiniUIFrame.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
 MiniUIFrame.BorderSizePixel = 0
@@ -424,34 +669,234 @@ MiniCorner.CornerRadius = UDim.new(0, 6)
 MiniCorner.Parent = MiniUIFrame
 
 local MiniTitle = Instance.new("TextLabel")
-MiniTitle.Size = UDim2.new(1, 0, 0, 22)
+MiniTitle.Size = UDim2.new(1, -12, 0, 18)
+MiniTitle.Position = UDim2.new(0, 6, 0, 4)
 MiniTitle.BackgroundTransparency = 1
-MiniTitle.Text = "⚡ barabaka status"
-MiniTitle.TextColor3 = Color3.fromRGB(220, 220, 220)
+MiniTitle.Text = "br?? status"
+MiniTitle.TextColor3 = Color3.fromRGB(240, 240, 240)
 MiniTitle.Font = Enum.Font.GothamBold
 MiniTitle.TextSize = 11
+MiniTitle.TextXAlignment = Enum.TextXAlignment.Left
 MiniTitle.Parent = MiniUIFrame
 
 local MiniStatsLabel = Instance.new("TextLabel")
-MiniStatsLabel.Size = UDim2.new(1, -12, 1, -26)
+MiniStatsLabel.Size = UDim2.new(0, 100, 1, -24)
 MiniStatsLabel.Position = UDim2.new(0, 6, 0, 22)
 MiniStatsLabel.BackgroundTransparency = 1
 MiniStatsLabel.Text = "FPS: 60\nPing: 0ms\nMemory: 0 MB\nAnti-AFK: Active\nAim Lock: OFF"
 MiniStatsLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
 MiniStatsLabel.Font = Enum.Font.Gotham
-MiniStatsLabel.TextSize = 10
+MiniStatsLabel.TextSize = 9.5
 MiniStatsLabel.TextXAlignment = Enum.TextXAlignment.Left
 MiniStatsLabel.TextYAlignment = Enum.TextYAlignment.Top
 MiniStatsLabel.Parent = MiniUIFrame
 
+local MiniImage = Instance.new("ImageLabel")
+MiniImage.Name = "MiniIcon"
+MiniImage.Size = UDim2.new(0, 46, 0, 64)
+MiniImage.Position = UDim2.new(1, -50, 0, 22)
+MiniImage.BackgroundTransparency = 1
+MiniImage.ScaleType = Enum.ScaleType.Fit
+MiniImage.Parent = MiniUIFrame
+
 --------------------------------------------------
--- UI BUILDER HELPERS
+-- KEYBIND SYSTEM ENGINE WITH FULLSCREEN PROMPT
 --------------------------------------------------
-local function AddToggle(parent, text, default, callback)
+local activeBindingFeature = nil
+local activeBindingButton = nil
+
+local function StartKeybinding(featureKey, displayName, btnRef)
+    activeBindingFeature = featureKey
+    activeBindingButton = btnRef
+
+    BindPromptSub.Text = "Target: [ " .. displayName .. " ]"
+    BindOverlay.Visible = true
+
+    TweenService:Create(BindOverlay, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundTransparency = 0.55}):Play()
+end
+
+local function AddBindRow(parent, displayName, featureKey)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 0, 32)
+    frame.BackgroundColor3 = isDarkTheme and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(225, 225, 225)
+    frame.BorderSizePixel = 0
+    frame.Parent = parent
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.65, 0, 1, 0)
+    label.Position = UDim2.new(0, 8, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = displayName
+    label.TextColor3 = isDarkTheme and Color3.fromRGB(200, 200, 200) or Color3.fromRGB(30, 30, 30)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local setBtn = Instance.new("TextButton")
+    setBtn.Size = UDim2.new(0.32, -8, 1, -6)
+    setBtn.Position = UDim2.new(0.68, 0, 0, 3)
+    setBtn.BackgroundColor3 = isDarkTheme and Color3.fromRGB(28, 28, 28) or Color3.fromRGB(200, 200, 200)
+    setBtn.BorderSizePixel = 0
+    setBtn.Text = "[" .. Binds[featureKey].Name .. "]"
+    setBtn.TextColor3 = isDarkTheme and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(10, 10, 10)
+    setBtn.Font = Enum.Font.GothamBold
+    setBtn.TextSize = 11
+    setBtn.Parent = frame
+
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 4)
+    btnCorner.Parent = setBtn
+
+    setBtn.MouseButton1Click:Connect(function()
+        StartKeybinding(featureKey, displayName, setBtn)
+    end)
+
+    return setBtn
+end
+
+--------------------------------------------------
+-- THEME SWITCH ENGINE
+--------------------------------------------------
+local function ApplyTheme()
+    local bgMain = isDarkTheme and Color3.fromRGB(5, 5, 5) or Color3.fromRGB(245, 245, 245)
+    local bgSub = isDarkTheme and Color3.fromRGB(8, 8, 8) or Color3.fromRGB(235, 235, 235)
+    local bgElement = isDarkTheme and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(225, 225, 225)
+    local textMain = isDarkTheme and Color3.fromRGB(230, 230, 230) or Color3.fromRGB(20, 20, 20)
+    local textSub = isDarkTheme and Color3.fromRGB(160, 160, 160) or Color3.fromRGB(90, 90, 90)
+    local strokeCol = isDarkTheme and Color3.fromRGB(40, 40, 40) or Color3.fromRGB(200, 200, 200)
+
+    local floatingBg = isDarkTheme and Color3.fromRGB(8, 8, 8) or Color3.fromRGB(235, 235, 235)
+    local floatingText = isDarkTheme and Color3.fromRGB(240, 240, 240) or Color3.fromRGB(20, 20, 20)
+    local floatingSubText = isDarkTheme and Color3.fromRGB(180, 180, 180) or Color3.fromRGB(60, 60, 60)
+
+    TweenService:Create(MainFrame, TweenInfo.new(0.35), {BackgroundColor3 = bgMain}):Play()
+    TweenService:Create(MainStroke, TweenInfo.new(0.35), {Color = strokeCol}):Play()
+    TweenService:Create(TitleLabel, TweenInfo.new(0.35), {TextColor3 = textMain}):Play()
+    TweenService:Create(TabBar, TweenInfo.new(0.35), {BackgroundColor3 = bgSub}):Play()
+    TweenService:Create(ContentContainer, TweenInfo.new(0.35), {BackgroundColor3 = bgSub}):Play()
+    TweenService:Create(ThemeToggleBtn, TweenInfo.new(0.35), {BackgroundColor3 = bgElement, TextColor3 = textMain}):Play()
+    TweenService:Create(ThemeStroke, TweenInfo.new(0.35), {Color = strokeCol}):Play()
+
+    TweenService:Create(WatermarkFrame, TweenInfo.new(0.35), {BackgroundColor3 = floatingBg}):Play()
+    TweenService:Create(WatermarkStroke, TweenInfo.new(0.35), {Color = strokeCol}):Play()
+    TweenService:Create(WatermarkText, TweenInfo.new(0.35), {TextColor3 = floatingText}):Play()
+
+    TweenService:Create(MiniUIFrame, TweenInfo.new(0.35), {BackgroundColor3 = floatingBg}):Play()
+    TweenService:Create(MiniStroke, TweenInfo.new(0.35), {Color = strokeCol}):Play()
+    TweenService:Create(MiniTitle, TweenInfo.new(0.35), {TextColor3 = floatingText}):Play()
+    TweenService:Create(MiniStatsLabel, TweenInfo.new(0.35), {TextColor3 = floatingSubText}):Play()
+
+    TweenService:Create(OpenBtn, TweenInfo.new(0.35), {BackgroundColor3 = floatingBg, TextColor3 = floatingText}):Play()
+    TweenService:Create(OpenBtnStroke, TweenInfo.new(0.35), {Color = strokeCol}):Play()
+
+    TweenService:Create(MobileAimBtn, TweenInfo.new(0.35), {BackgroundColor3 = floatingBg, TextColor3 = floatingText}):Play()
+    TweenService:Create(MobileAimStroke, TweenInfo.new(0.35), {Color = strokeCol}):Play()
+
+    for _, card in pairs(ArrayListCards) do
+        if card and card.Parent then
+            TweenService:Create(card, TweenInfo.new(0.35), {BackgroundColor3 = floatingBg}):Play()
+            local str = card:FindFirstChildOfClass("UIStroke")
+            local lbl = card:FindFirstChildOfClass("TextLabel")
+            if str then TweenService:Create(str, TweenInfo.new(0.35), {Color = strokeCol}):Play() end
+            if lbl then TweenService:Create(lbl, TweenInfo.new(0.35), {TextColor3 = floatingText}):Play() end
+        end
+    end
+
+    for _, tabBtn in pairs(TabButtons) do
+        if tabBtn and tabBtn.Parent then
+            local isSelected = (Pages[tabBtn.Text] and Pages[tabBtn.Text].Visible)
+            TweenService:Create(tabBtn, TweenInfo.new(0.35), {
+                BackgroundColor3 = isSelected and (isDarkTheme and Color3.fromRGB(25, 25, 25) or Color3.fromRGB(200, 200, 200)) or bgElement,
+                TextColor3 = isSelected and (isDarkTheme and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(10, 10, 10)) or textSub
+            }):Play()
+        end
+    end
+
+    for _, page in pairs(Pages) do
+        if page and page.Parent then
+            for _, child in ipairs(page:GetChildren()) do
+                if child:IsA("Frame") or child:IsA("TextButton") then
+                    TweenService:Create(child, TweenInfo.new(0.35), {BackgroundColor3 = bgElement}):Play()
+                    for _, sub in ipairs(child:GetDescendants()) do
+                        if sub:IsA("TextLabel") then
+                            TweenService:Create(sub, TweenInfo.new(0.35), {TextColor3 = textMain}):Play()
+                        elseif sub:IsA("TextButton") and sub ~= child then
+                            TweenService:Create(sub, TweenInfo.new(0.35), {
+                                BackgroundColor3 = isDarkTheme and Color3.fromRGB(28, 28, 28) or Color3.fromRGB(200, 200, 200),
+                                TextColor3 = textMain
+                            }):Play()
+                        elseif sub:IsA("TextBox") then
+                            TweenService:Create(sub, TweenInfo.new(0.35), {
+                                BackgroundColor3 = isDarkTheme and Color3.fromRGB(25, 25, 25) or Color3.fromRGB(190, 190, 190),
+                                TextColor3 = textMain
+                            }):Play()
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+ThemeToggleBtn.MouseButton1Click:Connect(function()
+    isDarkTheme = not isDarkTheme
+    ThemeToggleBtn.Text = isDarkTheme and "w" or "b"
+
+    local twDown = TweenService:Create(ThemeToggleBtn, TweenInfo.new(0.08), {Size = UDim2.new(0, 22, 0, 22), Position = UDim2.new(1, -64, 0, 7)})
+    twDown:Play()
+    twDown.Completed:Connect(function()
+        TweenService:Create(ThemeToggleBtn, TweenInfo.new(0.08), {Size = UDim2.new(0, 26, 0, 26), Position = UDim2.new(1, -66, 0, 5)}):Play()
+    end)
+
+    ApplyTheme()
+end)
+
+--------------------------------------------------
+-- ASSETS DOWNLOADING & CACHING
+--------------------------------------------------
+task.spawn(function()
+    pcall(function()
+        if writefile and makefolder and isfolder and getcustomasset then
+            if not isfolder("bruniv_assets") then
+                makefolder("bruniv_assets")
+            end
+            
+            local success1, content1 = pcall(function()
+                return game:HttpGet("https://raw.githubusercontent.com/babft1337/12312321-/main/2323.png")
+            end)
+            if success1 and content1 then
+                writefile("bruniv_assets/header.png", content1)
+                HeaderImage.Image = getcustomasset("bruniv_assets/header.png")
+            end
+
+            local success2, content2 = pcall(function()
+                return game:HttpGet("https://raw.githubusercontent.com/babft1337/12312321-/main/ebemn.png")
+            end)
+            if success2 and content2 then
+                writefile("bruniv_assets/mini.png", content2)
+                MiniImage.Image = getcustomasset("bruniv_assets/mini.png")
+            end
+
+            local success3, content3 = pcall(function()
+                return game:HttpGet("https://raw.githubusercontent.com/babft1337/12312321-/main/misuvava.png")
+            end)
+            if success3 and content3 then
+                writefile("bruniv_assets/watermark.png", content3)
+                WatermarkImage.Image = getcustomasset("bruniv_assets/watermark.png")
+            end
+        end
+    end)
+end)
+
+--------------------------------------------------
+-- UNIFIED SYNCHRONIZED TOGGLE BUILDER
+--------------------------------------------------
+local function AddToggle(parent, text, default, callback, featureKey)
     local state = default
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, 0, 0, 32)
-    btn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    btn.BackgroundColor3 = isDarkTheme and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(225, 225, 225)
     btn.BorderSizePixel = 0
     btn.Text = "  " .. text .. ": " .. (state and "[ ON ]" or "[ OFF ]")
     btn.TextColor3 = state and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(140, 140, 140)
@@ -460,23 +905,35 @@ local function AddToggle(parent, text, default, callback)
     btn.TextXAlignment = Enum.TextXAlignment.Left
     btn.Parent = parent
 
-    btn.MouseButton1Click:Connect(function()
-        state = not state
+    local function applyState(newState, skipNotify)
+        state = newState
         btn.Text = "  " .. text .. ": " .. (state and "[ ON ]" or "[ OFF ]")
-        btn.TextColor3 = state and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(140, 140, 140)
+        btn.TextColor3 = state and (isDarkTheme and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(10, 10, 10)) or Color3.fromRGB(140, 140, 140)
         callback(state)
-        Notify(text, state)
+        UpdateArrayList()
+        if not skipNotify then
+            Notify(text, state)
+        end
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        applyState(not state, false)
     end)
-    return btn
+
+    if featureKey then
+        FeatureRegistry[featureKey] = {
+            Get = function() return state end,
+            Set = function(newState, skipNotify) applyState(newState, skipNotify) end
+        }
+    end
+
+    return btn, applyState
 end
 
-local AimToggleRef
-local FlyToggleRef
-
-local function AddToggleWithInput(parent, text, defaultState, defaultValue, callbackToggle, callbackValue)
+local function AddToggleWithInput(parent, text, defaultState, defaultValue, callbackToggle, callbackValue, featureKey)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, 0, 0, 32)
-    frame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    frame.BackgroundColor3 = isDarkTheme and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(225, 225, 225)
     frame.BorderSizePixel = 0
     frame.Parent = parent
 
@@ -495,20 +952,27 @@ local function AddToggleWithInput(parent, text, defaultState, defaultValue, call
     local box = Instance.new("TextBox")
     box.Size = UDim2.new(0.3, 0, 1, -6)
     box.Position = UDim2.new(0.7, 0, 0, 3)
-    box.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    box.BackgroundColor3 = isDarkTheme and Color3.fromRGB(25, 25, 25) or Color3.fromRGB(190, 190, 190)
     box.BorderSizePixel = 0
     box.Text = tostring(defaultValue)
-    box.TextColor3 = Color3.fromRGB(220, 220, 220)
+    box.TextColor3 = isDarkTheme and Color3.fromRGB(220, 220, 220) or Color3.fromRGB(20, 20, 20)
     box.Font = Enum.Font.Gotham
     box.TextSize = 12
     box.Parent = frame
 
-    btn.MouseButton1Click:Connect(function()
-        state = not state
+    local function applyState(newState, skipNotify)
+        state = newState
         btn.Text = "  " .. text .. ": " .. (state and "[ ON ]" or "[ OFF ]")
-        btn.TextColor3 = state and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(140, 140, 140)
+        btn.TextColor3 = state and (isDarkTheme and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(10, 10, 10)) or Color3.fromRGB(140, 140, 140)
         callbackToggle(state)
-        Notify(text, state)
+        UpdateArrayList()
+        if not skipNotify then
+            Notify(text, state)
+        end
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        applyState(not state, false)
     end)
 
     box.FocusLost:Connect(function()
@@ -520,14 +984,21 @@ local function AddToggleWithInput(parent, text, defaultState, defaultValue, call
         end
     end)
 
-    return btn
+    if featureKey then
+        FeatureRegistry[featureKey] = {
+            Get = function() return state end,
+            Set = function(newState, skipNotify) applyState(newState, skipNotify) end
+        }
+    end
+
+    return btn, applyState
 end
 
 local function AddSlider(parent, text, min, max, default, callback)
     local val = default
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, 0, 0, 42)
-    frame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    frame.BackgroundColor3 = isDarkTheme and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(225, 225, 225)
     frame.BorderSizePixel = 0
     frame.Parent = parent
 
@@ -536,7 +1007,7 @@ local function AddSlider(parent, text, min, max, default, callback)
     label.Position = UDim2.new(0, 5, 0, 2)
     label.BackgroundTransparency = 1
     label.Text = text .. ": " .. tostring(val)
-    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.TextColor3 = isDarkTheme and Color3.fromRGB(200, 200, 200) or Color3.fromRGB(30, 30, 30)
     label.Font = Enum.Font.Gotham
     label.TextSize = 11
     label.TextXAlignment = Enum.TextXAlignment.Left
@@ -545,7 +1016,7 @@ local function AddSlider(parent, text, min, max, default, callback)
     local sliderBar = Instance.new("TextButton")
     sliderBar.Size = UDim2.new(1, -10, 0, 12)
     sliderBar.Position = UDim2.new(0, 5, 0, 24)
-    sliderBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    sliderBar.BackgroundColor3 = isDarkTheme and Color3.fromRGB(30, 30, 30) or Color3.fromRGB(180, 180, 180)
     sliderBar.BorderSizePixel = 0
     sliderBar.Text = ""
     sliderBar.Parent = frame
@@ -587,11 +1058,31 @@ end
 -- POPULATING TABS
 --------------------------------------------------
 -- 1. COMBAT TAB
-AimToggleRef = AddToggle(CombatPage, "Aim Lock", CombatState.Enabled, function(v) 
-    CombatState.Enabled = v 
+AddToggle(CombatPage, "Aim Lock", CombatState.Enabled, function(v) 
+    CombatState.Enabled = v
     MobileAimBtn.Text = v and "AIM: ON" or "AIM: OFF"
-    MobileAimBtn.TextColor3 = v and Color3.fromRGB(120, 255, 150) or Color3.fromRGB(255, 120, 120)
-    MobileAimStroke.Color = v and Color3.fromRGB(80, 220, 120) or Color3.fromRGB(220, 80, 80)
+end, "AimLock")
+
+local AimModeBtn = Instance.new("TextButton")
+AimModeBtn.Size = UDim2.new(1, 0, 0, 32)
+AimModeBtn.BackgroundColor3 = isDarkTheme and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(225, 225, 225)
+AimModeBtn.BorderSizePixel = 0
+AimModeBtn.Text = "  Aim Mode: [ TOGGLE ]"
+AimModeBtn.TextColor3 = isDarkTheme and Color3.fromRGB(200, 200, 200) or Color3.fromRGB(30, 30, 30)
+AimModeBtn.Font = Enum.Font.Gotham
+AimModeBtn.TextSize = 12
+AimModeBtn.TextXAlignment = Enum.TextXAlignment.Left
+AimModeBtn.Parent = CombatPage
+
+AimModeBtn.MouseButton1Click:Connect(function()
+    if CombatState.Mode == "Toggle" then
+        CombatState.Mode = "Hold"
+        AimModeBtn.Text = "  Aim Mode: [ HOLD ]"
+    else
+        CombatState.Mode = "Toggle"
+        AimModeBtn.Text = "  Aim Mode: [ TOGGLE ]"
+    end
+    Notify("Aim Mode", CombatState.Mode)
 end)
 
 AddToggle(CombatPage, "Mobile Aim Button", false, function(v)
@@ -609,38 +1100,24 @@ AddToggle(CombatPage, "FOV & Snap Visuals", CombatState.ShowVisuals, function(v)
 end)
 AddSlider(CombatPage, "FOV Diameter", 50, 800, CombatState.FOV, function(v) CombatState.FOV = v end)
 
-local AimBindBtn = Instance.new("TextButton")
-AimBindBtn.Size = UDim2.new(1, 0, 0, 32)
-AimBindBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-AimBindBtn.BorderSizePixel = 0
-AimBindBtn.Text = "  Aim Lock Bind: [ " .. CombatState.Bind.Name .. " ]"
-AimBindBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
-AimBindBtn.Font = Enum.Font.Gotham
-AimBindBtn.TextSize = 12
-AimBindBtn.TextXAlignment = Enum.TextXAlignment.Left
-AimBindBtn.Parent = CombatPage
-
-local listeningForAimBind = false
-AimBindBtn.MouseButton1Click:Connect(function()
-    listeningForAimBind = true
-    AimBindBtn.Text = "  Press any key..."
-    AimBindBtn.TextColor3 = Color3.fromRGB(255, 255, 0)
-end)
-
--- Mobile Aim Button Click Handler
-MobileAimBtn.MouseButton1Click:Connect(function()
-    CombatState.Enabled = not CombatState.Enabled
-    if AimToggleRef then
-        AimToggleRef.Text = "  Aim Lock: " .. (CombatState.Enabled and "[ ON ]" or "[ OFF ]")
-        AimToggleRef.TextColor3 = CombatState.Enabled and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(140, 140, 140)
+-- Mobile Aim Handlers
+MobileAimBtn.MouseButton1Down:Connect(function()
+    if CombatState.Mode == "Hold" and FeatureRegistry["AimLock"] then
+        FeatureRegistry["AimLock"].Set(true)
     end
-    MobileAimBtn.Text = CombatState.Enabled and "AIM: ON" or "AIM: OFF"
-    MobileAimBtn.TextColor3 = CombatState.Enabled and Color3.fromRGB(120, 255, 150) or Color3.fromRGB(255, 120, 120)
-    MobileAimStroke.Color = CombatState.Enabled and Color3.fromRGB(80, 220, 120) or Color3.fromRGB(220, 80, 80)
-    Notify("Aim Lock", CombatState.Enabled)
+end)
+MobileAimBtn.MouseButton1Up:Connect(function()
+    if CombatState.Mode == "Hold" and FeatureRegistry["AimLock"] then
+        FeatureRegistry["AimLock"].Set(false)
+    end
+end)
+MobileAimBtn.MouseButton1Click:Connect(function()
+    if CombatState.Mode == "Toggle" and FeatureRegistry["AimLock"] then
+        FeatureRegistry["AimLock"].Set(not FeatureRegistry["AimLock"].Get())
+    end
 end)
 
--- 2. TRACKING TAB (CLEAN ENGLISH NAMES)
+-- 2. TRACKING TAB
 local BodyParts = {
     {Name = "Head", Part = "Head"},
     {Name = "Torso / Body", Part = "Torso"},
@@ -655,10 +1132,10 @@ local TrackingButtons = {}
 for _, item in ipairs(BodyParts) do
     local partBtn = Instance.new("TextButton")
     partBtn.Size = UDim2.new(1, 0, 0, 32)
-    partBtn.BackgroundColor3 = (CombatState.TargetPart == item.Part or (CombatState.TargetPart == "Torso" and item.Part == "Torso")) and Color3.fromRGB(35, 35, 35) or Color3.fromRGB(15, 15, 15)
+    partBtn.BackgroundColor3 = isDarkTheme and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(225, 225, 225)
     partBtn.BorderSizePixel = 0
     partBtn.Text = "  Lock Target: " .. item.Name
-    partBtn.TextColor3 = (CombatState.TargetPart == item.Part or (CombatState.TargetPart == "Torso" and item.Part == "Torso")) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(160, 160, 160)
+    partBtn.TextColor3 = isDarkTheme and Color3.fromRGB(160, 160, 160) or Color3.fromRGB(80, 80, 80)
     partBtn.Font = Enum.Font.Gotham
     partBtn.TextSize = 12
     partBtn.TextXAlignment = Enum.TextXAlignment.Left
@@ -668,12 +1145,12 @@ for _, item in ipairs(BodyParts) do
 
     partBtn.MouseButton1Click:Connect(function()
         CombatState.TargetPart = item.Part
-        for p, b in pairs(TrackingButtons) do
-            b.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-            b.TextColor3 = Color3.fromRGB(160, 160, 160)
+        for _, b in pairs(TrackingButtons) do
+            b.BackgroundColor3 = isDarkTheme and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(225, 225, 225)
+            b.TextColor3 = isDarkTheme and Color3.fromRGB(160, 160, 160) or Color3.fromRGB(80, 80, 80)
         end
-        partBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-        partBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        partBtn.BackgroundColor3 = isDarkTheme and Color3.fromRGB(35, 35, 35) or Color3.fromRGB(190, 190, 190)
+        partBtn.TextColor3 = isDarkTheme and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(10, 10, 10)
         Notify("Target Part: " .. item.Name, true)
     end)
 end
@@ -686,7 +1163,7 @@ AddToggleWithInput(MovementPage, "Walk Speed", MovementState.WalkSpeedEnabled, M
     end
 end, function(v)
     MovementState.WalkSpeedValue = v
-end)
+end, "WalkSpeed")
 
 AddToggleWithInput(MovementPage, "Jump Boost", MovementState.JumpBoostEnabled, MovementState.JumpPowerValue, function(v)
     MovementState.JumpBoostEnabled = v
@@ -697,9 +1174,9 @@ AddToggleWithInput(MovementPage, "Jump Boost", MovementState.JumpBoostEnabled, M
     end
 end, function(v)
     MovementState.JumpPowerValue = v
-end)
+end, "JumpBoost")
 
-FlyToggleRef = AddToggleWithInput(MovementPage, "Fly", MovementState.FlyEnabled, MovementState.FlySpeedValue, function(v)
+AddToggleWithInput(MovementPage, "Fly", MovementState.FlyEnabled, MovementState.FlySpeedValue, function(v)
     MovementState.FlyEnabled = v
     local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if hrp then
@@ -725,47 +1202,27 @@ FlyToggleRef = AddToggleWithInput(MovementPage, "Fly", MovementState.FlyEnabled,
     end
 end, function(v)
     MovementState.FlySpeedValue = v
-end)
-
-local FlyBindBtn = Instance.new("TextButton")
-FlyBindBtn.Size = UDim2.new(1, 0, 0, 32)
-FlyBindBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-FlyBindBtn.BorderSizePixel = 0
-FlyBindBtn.Text = "  Fly Bind: [ " .. MovementState.FlyBind.Name .. " ]"
-FlyBindBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
-FlyBindBtn.Font = Enum.Font.Gotham
-FlyBindBtn.TextSize = 12
-FlyBindBtn.TextXAlignment = Enum.TextXAlignment.Left
-FlyBindBtn.Parent = MovementPage
-
-local listeningForFlyBind = false
-FlyBindBtn.MouseButton1Click:Connect(function()
-    listeningForFlyBind = true
-    FlyBindBtn.Text = "  Press any key..."
-    FlyBindBtn.TextColor3 = Color3.fromRGB(255, 255, 0)
-end)
+end, "Fly")
 
 AddToggle(MovementPage, "NoClip", MovementState.NoClipEnabled, function(v)
     MovementState.NoClipEnabled = v
-end)
+    if v then
+        local CharacterCollision = ReplicatedStorage:FindFirstChild("Scripts") and ReplicatedStorage.Scripts:FindFirstChild("CharacterCollision")
+        if CharacterCollision then
+            CharacterCollision:Destroy()
+            local head = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head")
+            if head and getconnections then
+                for _, Connection in getconnections(head:GetPropertyChangedSignal("CanCollide")) do
+                    Connection:Disable()
+                end
+            end
+        end
+    end
+end, "NoClip")
 
 AddToggle(MovementPage, "Anti Fall Damage", MovementState.AntiFallDamage, function(v)
     MovementState.AntiFallDamage = v
-end)
-
-UIS.InputBegan:Connect(function(input, gpe)
-    if listeningForAimBind and input.UserInputType == Enum.UserInputType.Keyboard then
-        CombatState.Bind = input.KeyCode
-        listeningForAimBind = false
-        AimBindBtn.Text = "  Aim Lock Bind: [ " .. CombatState.Bind.Name .. " ]"
-        AimBindBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
-    elseif listeningForFlyBind and input.UserInputType == Enum.UserInputType.Keyboard then
-        MovementState.FlyBind = input.KeyCode
-        listeningForFlyBind = false
-        FlyBindBtn.Text = "  Fly Bind: [ " .. MovementState.FlyBind.Name .. " ]"
-        FlyBindBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
-    end
-end)
+end, "AntiFallDamage")
 
 -- 4. ESP TAB
 AddToggle(ESPPage, "Team Check", ESPState.TeamCheck, function(v) ESPState.TeamCheck = v end)
@@ -785,16 +1242,35 @@ AddToggle(ESPPage, "Name ESP", ESPState.Name, function(v) ESPState.Name = v end)
 AddToggle(ESPPage, "Distance ESP", ESPState.Distance, function(v) ESPState.Distance = v end)
 AddToggle(ESPPage, "HP ESP (Health)", ESPState.Health, function(v) ESPState.Health = v end)
 AddToggle(ESPPage, "Tracers ESP", ESPState.Tracers, function(v) ESPState.Tracers = v end)
-AddSlider(ESPPage, "Camera FOV", 70, 120, ESPState.FOVValue, function(v) ESPState.FOVValue = v end)
-AddToggle(ESPPage, "Rainbow China Hat", ESPState.ChinaHat, function(v)
+
+-- 5. VISUALS TAB
+AddToggle(VisualsPage, "Watermark", ESPState.Watermark, function(v)
+    ESPState.Watermark = v
+    WatermarkFrame.Visible = v
+end)
+
+AddToggle(VisualsPage, "ArrayList", ESPState.ArrayList, function(v)
+    ESPState.ArrayList = v
+    UpdateArrayList()
+end)
+
+AddToggle(VisualsPage, "Aspect Ratio 4:3", ESPState.Aspect43, function(v) ESPState.Aspect43 = v end)
+AddToggle(VisualsPage, "Dark Sky", ESPState.DarkSky, function(v)
+    ESPState.DarkSky = v
+    if not v then
+        Lighting.ClockTime = OriginalLighting.ClockTime
+        Lighting.Brightness = OriginalLighting.Brightness
+    end
+end)
+AddSlider(VisualsPage, "Camera FOV", 70, 120, ESPState.FOVValue, function(v) ESPState.FOVValue = v end)
+AddToggle(VisualsPage, "China Hat", ESPState.ChinaHat, function(v)
     ESPState.ChinaHat = v
     if not v and ChinaHatPart then
         ChinaHatPart:Destroy()
         ChinaHatPart = nil
     end
 end)
-
-AddToggle(ESPPage, "Full Bright", ESPState.FullBright, function(v)
+AddToggle(VisualsPage, "Full Bright", ESPState.FullBright, function(v)
     ESPState.FullBright = v
     if not v then
         Lighting.Brightness = OriginalLighting.Brightness
@@ -805,10 +1281,9 @@ AddToggle(ESPPage, "Full Bright", ESPState.FullBright, function(v)
     end
 end)
 
--- Reversible Boost FPS (Optimize)
-AddToggle(ESPPage, "Boost FPS (Optimize)", ESPState.BoostFPS, function(v)
-    ESPState.BoostFPS = v
-    if v then
+local function TriggerBoostFPS(state)
+    ESPState.BoostFPS = state
+    if state then
         pcall(function()
             settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
             Lighting.GlobalShadows = false
@@ -848,15 +1323,19 @@ AddToggle(ESPPage, "Boost FPS (Optimize)", ESPState.BoostFPS, function(v)
             OriginalPartsData = {}
         end)
     end
-end)
+end
 
--- 5. PERFORMANCE TAB
+AddToggle(VisualsPage, "Boost FPS (Optimize)", ESPState.BoostFPS, function(v)
+    TriggerBoostFPS(v)
+end, "BoostFPS")
+
+-- 6. PERFORMANCE TAB
 AddToggle(PerformancePage, "mini ui barabaka", PerformanceState.MiniUIEnabled, function(v)
     PerformanceState.MiniUIEnabled = v
     MiniUIFrame.Visible = v
-end)
+end, "MiniUI")
 
--- 6. TELEPORT TAB
+-- 7. TELEPORT TAB
 local function RefreshTeleportList()
     for _, child in ipairs(TeleportPage:GetChildren()) do
         if child:IsA("TextButton") then child:Destroy() end
@@ -866,10 +1345,10 @@ local function RefreshTeleportList()
         if player ~= LocalPlayer then
             local tpBtn = Instance.new("TextButton")
             tpBtn.Size = UDim2.new(1, 0, 0, 30)
-            tpBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+            tpBtn.BackgroundColor3 = isDarkTheme and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(225, 225, 225)
             tpBtn.BorderSizePixel = 0
             tpBtn.Text = "Teleport to: " .. player.Name
-            tpBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+            tpBtn.TextColor3 = isDarkTheme and Color3.fromRGB(200, 200, 200) or Color3.fromRGB(30, 30, 30)
             tpBtn.Font = Enum.Font.Gotham
             tpBtn.TextSize = 11
             tpBtn.Parent = TeleportPage
@@ -893,17 +1372,130 @@ Players.PlayerAdded:Connect(RefreshTeleportList)
 Players.PlayerRemoving:Connect(RefreshTeleportList)
 RefreshTeleportList()
 
--- 7. INFO TAB
+-- 8. BINDS TAB
+AddBindRow(BindsPage, "Aim Lock", "AimLock")
+AddBindRow(BindsPage, "Walk Speed", "WalkSpeed")
+AddBindRow(BindsPage, "Jump Boost", "JumpBoost")
+AddBindRow(BindsPage, "Fly", "Fly")
+AddBindRow(BindsPage, "NoClip", "NoClip")
+AddBindRow(BindsPage, "Anti Fall Damage", "AntiFallDamage")
+AddBindRow(BindsPage, "Boost FPS", "BoostFPS")
+AddBindRow(BindsPage, "Mini UI", "MiniUI")
+
+-- 9. SETTINGS TAB
+AddBindRow(SettingsPage, "Menu GUI Bind", "MenuGUI")
+
 local InfoLabel = Instance.new("TextLabel")
-InfoLabel.Size = UDim2.new(1, 0, 1, 0)
+InfoLabel.Size = UDim2.new(1, 0, 0, 160)
+InfoLabel.Position = UDim2.new(0, 0, 0, 45)
 InfoLabel.BackgroundTransparency = 1
-InfoLabel.Text = "📌 br??univ MANUAL:\n\n📱 On Phone: Tap the [OPEN / CLOSE] button to toggle menu.\n\n💻 On PC: Tap 'K' on your keyboard or [OPEN] button.\n\n⚡ Aimlock Keybind: Customizable in Combat tab (defaults to [ E ]).\n\nAll systems run smoothly in real-time."
-InfoLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+InfoLabel.Text = "📌 br??univ MANUAL:\n\nUniversal script, fits many games, not all.\n\n📱 On Phone: Tap the [OPEN / CLOSE] button to toggle menu.\n\n💻 On PC: Tap your assigned GUI bind key or [OPEN] button.\n\nIf you find bugs or want to improve something, write to tg: barabakaa404"
+InfoLabel.TextColor3 = isDarkTheme and Color3.fromRGB(180, 180, 180) or Color3.fromRGB(60, 60, 60)
 InfoLabel.Font = Enum.Font.Gotham
 InfoLabel.TextSize = 12
 InfoLabel.TextWrapped = true
 InfoLabel.TextYAlignment = Enum.TextYAlignment.Top
-InfoLabel.Parent = InfoPage
+InfoLabel.Parent = SettingsPage
+
+--------------------------------------------------
+-- OPEN / CLOSE TOGGLE HANDLER
+--------------------------------------------------
+local function ToggleMenu()
+    MainFrame.Visible = not MainFrame.Visible
+    OpenBtn.Text = MainFrame.Visible and "CLOSE" or "OPEN"
+end
+
+OpenBtn.MouseButton1Click:Connect(ToggleMenu)
+
+--------------------------------------------------
+-- INPUT EVENTS HANDLER (FULLSCREEN OVERLAY BINDING)
+--------------------------------------------------
+UIS.InputBegan:Connect(function(input, gpe)
+    if activeBindingFeature and input.UserInputType == Enum.UserInputType.Keyboard then
+        local pressedKey = input.KeyCode
+        
+        if pressedKey == Enum.KeyCode.Escape then
+            pressedKey = Enum.KeyCode.Unknown
+        end
+
+        Binds[activeBindingFeature] = pressedKey
+        if activeBindingButton then
+            activeBindingButton.Text = "[" .. pressedKey.Name .. "]"
+        end
+
+        activeBindingFeature = nil
+        activeBindingButton = nil
+
+        local fadeOut = TweenService:Create(BindOverlay, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency = 1})
+        fadeOut:Play()
+        fadeOut.Completed:Connect(function()
+            BindOverlay.Visible = false
+        end)
+        return
+    end
+
+    if not gpe and input.KeyCode == Binds.MenuGUI and Binds.MenuGUI ~= Enum.KeyCode.Unknown then
+        ToggleMenu()
+    end
+
+    if not gpe and not activeBindingFeature then
+        local key = input.KeyCode
+
+        if key ~= Enum.KeyCode.Unknown then
+            if key == Binds.AimLock then
+                if CombatState.Mode == "Toggle" then
+                    if FeatureRegistry["AimLock"] then
+                        FeatureRegistry["AimLock"].Set(not FeatureRegistry["AimLock"].Get())
+                    end
+                elseif CombatState.Mode == "Hold" then
+                    if FeatureRegistry["AimLock"] then
+                        FeatureRegistry["AimLock"].Set(true)
+                    end
+                end
+            elseif key == Binds.WalkSpeed then
+                if FeatureRegistry["WalkSpeed"] then
+                    FeatureRegistry["WalkSpeed"].Set(not FeatureRegistry["WalkSpeed"].Get())
+                end
+            elseif key == Binds.JumpBoost then
+                if FeatureRegistry["JumpBoost"] then
+                    FeatureRegistry["JumpBoost"].Set(not FeatureRegistry["JumpBoost"].Get())
+                end
+            elseif key == Binds.Fly then
+                if FeatureRegistry["Fly"] then
+                    FeatureRegistry["Fly"].Set(not FeatureRegistry["Fly"].Get())
+                end
+            elseif key == Binds.NoClip then
+                if FeatureRegistry["NoClip"] then
+                    FeatureRegistry["NoClip"].Set(not FeatureRegistry["NoClip"].Get())
+                end
+            elseif key == Binds.AntiFallDamage then
+                if FeatureRegistry["AntiFallDamage"] then
+                    FeatureRegistry["AntiFallDamage"].Set(not FeatureRegistry["AntiFallDamage"].Get())
+                end
+            elseif key == Binds.BoostFPS then
+                if FeatureRegistry["BoostFPS"] then
+                    FeatureRegistry["BoostFPS"].Set(not FeatureRegistry["BoostFPS"].Get())
+                end
+            elseif key == Binds.MiniUI then
+                if FeatureRegistry["MiniUI"] then
+                    FeatureRegistry["MiniUI"].Set(not FeatureRegistry["MiniUI"].Get())
+                end
+            end
+        end
+    end
+    FlyKeys[input.KeyCode] = true
+end)
+
+UIS.InputEnded:Connect(function(input)
+    if not activeBindingFeature then
+        if input.KeyCode == Binds.AimLock and CombatState.Mode == "Hold" then
+            if FeatureRegistry["AimLock"] then
+                FeatureRegistry["AimLock"].Set(false)
+            end
+        end
+    end
+    FlyKeys[input.KeyCode] = nil
+end)
 
 --------------------------------------------------
 -- LOADING INTRO ANIMATION
@@ -940,66 +1532,6 @@ task.spawn(function()
 end)
 
 --------------------------------------------------
--- OPEN / CLOSE TOGGLE HANDLER
---------------------------------------------------
-local function ToggleMenu()
-    MainFrame.Visible = not MainFrame.Visible
-    OpenBtn.Text = MainFrame.Visible and "CLOSE" or "OPEN"
-end
-
-OpenBtn.MouseButton1Click:Connect(ToggleMenu)
-
-UIS.InputBegan:Connect(function(input, gpe)
-    if not gpe and input.KeyCode == Enum.KeyCode.K then
-        ToggleMenu()
-    end
-    if not gpe and not listeningForAimBind and not listeningForFlyBind then
-        if input.KeyCode == CombatState.Bind then
-            CombatState.Enabled = not CombatState.Enabled
-            AimToggleRef.Text = "  Aim Lock: " .. (CombatState.Enabled and "[ ON ]" or "[ OFF ]")
-            AimToggleRef.TextColor3 = CombatState.Enabled and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(140, 140, 140)
-            MobileAimBtn.Text = CombatState.Enabled and "AIM: ON" or "AIM: OFF"
-            MobileAimBtn.TextColor3 = CombatState.Enabled and Color3.fromRGB(120, 255, 150) or Color3.fromRGB(255, 120, 120)
-            MobileAimStroke.Color = CombatState.Enabled and Color3.fromRGB(80, 220, 120) or Color3.fromRGB(220, 80, 80)
-            Notify("Aim Lock", CombatState.Enabled)
-        elseif input.KeyCode == MovementState.FlyBind then
-            MovementState.FlyEnabled = not MovementState.FlyEnabled
-            FlyToggleRef.Text = "  Fly: " .. (MovementState.FlyEnabled and "[ ON ]" or "[ OFF ]")
-            FlyToggleRef.TextColor3 = MovementState.FlyEnabled and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(140, 140, 140)
-            Notify("Fly", MovementState.FlyEnabled)
-
-            local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                if MovementState.FlyEnabled then
-                    if not hrp:FindFirstChild("BrUnivFlyVelocity") then
-                        local bv = Instance.new("BodyVelocity")
-                        bv.Name = "BrUnivFlyVelocity"
-                        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-                        bv.Velocity = Vector3.new(0, 0, 0)
-                        bv.Parent = hrp
-                    end
-                    if not hrp:FindFirstChild("BrUnivFlyGyro") then
-                        local bg = Instance.new("BodyGyro")
-                        bg.Name = "BrUnivFlyGyro"
-                        bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-                        bg.CFrame = hrp.CFrame
-                        bg.Parent = hrp
-                    end
-                else
-                    if hrp:FindFirstChild("BrUnivFlyVelocity") then hrp.BrUnivFlyVelocity:Destroy() end
-                    if hrp:FindFirstChild("BrUnivFlyGyro") then hrp.BrUnivFlyGyro:Destroy() end
-                end
-            end
-        end
-    end
-    FlyKeys[input.KeyCode] = true
-end)
-
-UIS.InputEnded:Connect(function(input)
-    FlyKeys[input.KeyCode] = nil
-end)
-
---------------------------------------------------
 -- ANTI-AFK ENGINE
 --------------------------------------------------
 local VirtualUser = game:GetService("VirtualUser")
@@ -1009,7 +1541,7 @@ LocalPlayer.Idled:Connect(function()
 end)
 
 --------------------------------------------------
--- PERFORMANCE HUD MONITOR LOOP
+-- PERFORMANCE HUD MONITOR LOOP & VISUALS
 --------------------------------------------------
 local frameCount = 0
 local lastFpsUpdate = tick()
@@ -1050,6 +1582,20 @@ RunService.RenderStepped:Connect(function()
         Lighting.GlobalShadows = false
         Lighting.Ambient = Color3.fromRGB(255, 255, 255)
     end
+
+    if ESPState.Aspect43 then
+        Camera.CFrame = Camera.CFrame * CFrame.new(0, 0, 0, 1, 0, 0, 0, 0.80, 0, 0, 0, 1)
+    end
+
+    if ESPState.DarkSky then
+        Lighting.ClockTime = 0
+        Lighting.Brightness = 0
+        for _, v in ipairs(Lighting:GetChildren()) do
+            if v:IsA("Sky") then
+                v:Destroy()
+            end
+        end
+    end
 end)
 
 --------------------------------------------------
@@ -1079,7 +1625,6 @@ RunService.Stepped:Connect(function()
         end
     end
 
-    -- Fixed Anti Fall Damage (Micro-velocity reset & state change near ground)
     if MovementState.AntiFallDamage and hrp and hum then
         local velY = hrp.Velocity.Y
         if velY < -25 then
@@ -1349,7 +1894,16 @@ RunService.RenderStepped:Connect(function()
                 ChinaHatPart.Parent = workspace
             end
             
-            ChinaHatPart.Color = Color3.fromHSV((tick() * 0.4) % 1, 1, 1)
+            local val = 0.5 + 0.5 * math.sin(tick() * 3)
+            ChinaHatPart.Color = Color3.new(val, val, val)
+            
+            local camDist = (Camera.CFrame.Position - head.Position).Magnitude
+            if camDist < 1.6 then
+                ChinaHatPart.Transparency = 1
+            else
+                ChinaHatPart.Transparency = 0
+            end
+
             ChinaHatPart.CFrame = head.CFrame * CFrame.new(0, 1.1, 0) * CFrame.Angles(0, math.rad(tick() * 120 % 360), 0)
         end
     end)
