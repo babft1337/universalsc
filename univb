@@ -1,5 +1,5 @@
 -- language: Luau, environment: Roblox Executor, target: Roblox Client
--- br??univ | Suite with Loading Screen, Notifications, Clean Tracking & Performance
+-- br??univ | Suite with Reversible Boost FPS & Mobile AimLock Button
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -60,6 +60,7 @@ local ESPDrawings = {}
 local ChamsHighlights = {}
 local ChinaHatPart = nil
 local FlyKeys = {}
+local OriginalPartsData = {}
 
 local OriginalLighting = {
     Brightness = Lighting.Brightness,
@@ -141,6 +142,31 @@ ScreenGui.ResetOnSpawn = false
 pcall(function() ScreenGui.Parent = CoreGui end)
 if not ScreenGui.Parent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
+-- MOBILE AIM LOCK BUTTON (Rectangular & Compact)
+local MobileAimBtn = Instance.new("TextButton")
+MobileAimBtn.Name = "MobileAimButton"
+MobileAimBtn.Size = UDim2.new(0, 80, 0, 36)
+MobileAimBtn.Position = UDim2.new(0, 15, 0.52, 0)
+MobileAimBtn.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
+MobileAimBtn.BorderSizePixel = 0
+MobileAimBtn.Text = "AIM: OFF"
+MobileAimBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
+MobileAimBtn.Font = Enum.Font.GothamBold
+MobileAimBtn.TextSize = 11
+MobileAimBtn.Active = true
+MobileAimBtn.Visible = false
+MobileAimBtn.Parent = ScreenGui
+MakeDraggable(MobileAimBtn)
+
+local MobileAimStroke = Instance.new("UIStroke")
+MobileAimStroke.Color = Color3.fromRGB(220, 80, 80)
+MobileAimStroke.Thickness = 1.5
+MobileAimStroke.Parent = MobileAimBtn
+
+local MobileAimCorner = Instance.new("UICorner")
+MobileAimCorner.CornerRadius = UDim.new(0, 6)
+MobileAimCorner.Parent = MobileAimBtn
+
 -- NOTIFICATION CONTAINER (Bottom Right)
 local NotifContainer = Instance.new("Frame")
 NotifContainer.Name = "NotifContainer"
@@ -186,13 +212,11 @@ local function Notify(featureName, state)
 
     notifFrame.Parent = NotifContainer
 
-    -- Fade In
     TweenService:Create(notifFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundTransparency = 0.15}):Play()
     TweenService:Create(stroke, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Transparency = 0.3}):Play()
     TweenService:Create(label, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
 
     task.delay(2.2, function()
-        -- Fade Out
         local fadeBg = TweenService:Create(notifFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency = 1})
         local fadeStr = TweenService:Create(stroke, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Transparency = 1})
         local fadeLbl = TweenService:Create(label, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency = 1})
@@ -564,7 +588,15 @@ end
 -- 1. COMBAT TAB
 AimToggleRef = AddToggle(CombatPage, "Aim Lock", CombatState.Enabled, function(v) 
     CombatState.Enabled = v 
+    MobileAimBtn.Text = v and "AIM: ON" or "AIM: OFF"
+    MobileAimBtn.TextColor3 = v and Color3.fromRGB(120, 255, 150) or Color3.fromRGB(255, 120, 120)
+    MobileAimStroke.Color = v and Color3.fromRGB(80, 220, 120) or Color3.fromRGB(220, 80, 80)
 end)
+
+AddToggle(CombatPage, "Mobile Aim Button", false, function(v)
+    MobileAimBtn.Visible = v
+end)
+
 AddToggle(CombatPage, "Team Check", CombatState.TeamCheck, function(v) CombatState.TeamCheck = v end)
 AddToggle(CombatPage, "Wall Check", CombatState.WallCheck, function(v) CombatState.WallCheck = v end)
 AddToggle(CombatPage, "Show Distance", CombatState.ShowDistance, function(v) CombatState.ShowDistance = v end)
@@ -592,6 +624,19 @@ AimBindBtn.MouseButton1Click:Connect(function()
     listeningForAimBind = true
     AimBindBtn.Text = "  Press any key..."
     AimBindBtn.TextColor3 = Color3.fromRGB(255, 255, 0)
+end)
+
+-- Mobile Aim Button Click Handler
+MobileAimBtn.MouseButton1Click:Connect(function()
+    CombatState.Enabled = not CombatState.Enabled
+    if AimToggleRef then
+        AimToggleRef.Text = "  Aim Lock: " .. (CombatState.Enabled and "[ ON ]" or "[ OFF ]")
+        AimToggleRef.TextColor3 = CombatState.Enabled and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(140, 140, 140)
+    end
+    MobileAimBtn.Text = CombatState.Enabled and "AIM: ON" or "AIM: OFF"
+    MobileAimBtn.TextColor3 = CombatState.Enabled and Color3.fromRGB(120, 255, 150) or Color3.fromRGB(255, 120, 120)
+    MobileAimStroke.Color = CombatState.Enabled and Color3.fromRGB(80, 220, 120) or Color3.fromRGB(220, 80, 80)
+    Notify("Aim Lock", CombatState.Enabled)
 end)
 
 -- 2. TRACKING TAB (CLEAN ENGLISH NAMES)
@@ -755,6 +800,7 @@ AddToggle(ESPPage, "Full Bright", ESPState.FullBright, function(v)
     end
 end)
 
+-- Reversible Boost FPS (Optimize)
 AddToggle(ESPPage, "Boost FPS (Optimize)", ESPState.BoostFPS, function(v)
     ESPState.BoostFPS = v
     if v then
@@ -762,16 +808,39 @@ AddToggle(ESPPage, "Boost FPS (Optimize)", ESPState.BoostFPS, function(v)
             settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
             Lighting.GlobalShadows = false
             Lighting.FogEnd = 9e9
+            OriginalPartsData = {}
             for _, obj in ipairs(workspace:GetDescendants()) do
                 if obj:IsA("BasePart") then
+                    OriginalPartsData[obj] = {Material = obj.Material, CastShadow = obj.CastShadow}
                     obj.Material = Enum.Material.SmoothPlastic
                     obj.CastShadow = false
                 elseif obj:IsA("Decal") or obj:IsA("Texture") then
+                    OriginalPartsData[obj] = {Transparency = obj.Transparency}
                     obj.Transparency = 1
                 elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+                    OriginalPartsData[obj] = {Enabled = obj.Enabled}
                     obj.Enabled = false
                 end
             end
+        end)
+    else
+        pcall(function()
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
+            Lighting.GlobalShadows = OriginalLighting.GlobalShadows
+            Lighting.FogEnd = OriginalLighting.FogEnd
+            for obj, props in pairs(OriginalPartsData) do
+                if obj and obj.Parent then
+                    if obj:IsA("BasePart") then
+                        if props.Material then obj.Material = props.Material end
+                        if props.CastShadow ~= nil then obj.CastShadow = props.CastShadow end
+                    elseif obj:IsA("Decal") or obj:IsA("Texture") then
+                        if props.Transparency ~= nil then obj.Transparency = props.Transparency end
+                    elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+                        if props.Enabled ~= nil then obj.Enabled = props.Enabled end
+                    end
+                end
+            end
+            OriginalPartsData = {}
         end)
     end
 end)
@@ -835,14 +904,12 @@ InfoLabel.Parent = InfoPage
 -- LOADING INTRO ANIMATION
 --------------------------------------------------
 task.spawn(function()
-    -- Fade in 'hello?'
     TweenService:Create(LoadingFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundTransparency = 0.1}):Play()
     TweenService:Create(LoadingStroke, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Transparency = 0.3}):Play()
     TweenService:Create(LoadingText, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
     
     task.wait(1.5)
 
-    -- Fade out 'hello?'
     TweenService:Create(LoadingFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency = 1}):Play()
     TweenService:Create(LoadingStroke, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Transparency = 1}):Play()
     local textFade = TweenService:Create(LoadingText, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency = 1})
@@ -851,7 +918,6 @@ task.spawn(function()
     textFade.Completed:Connect(function()
         LoadingFrame:Destroy()
 
-        -- Smoothly Reveal Main UI & Open Button
         MainFrame.Visible = true
         OpenBtn.Visible = true
 
@@ -887,6 +953,9 @@ UIS.InputBegan:Connect(function(input, gpe)
             CombatState.Enabled = not CombatState.Enabled
             AimToggleRef.Text = "  Aim Lock: " .. (CombatState.Enabled and "[ ON ]" or "[ OFF ]")
             AimToggleRef.TextColor3 = CombatState.Enabled and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(140, 140, 140)
+            MobileAimBtn.Text = CombatState.Enabled and "AIM: ON" or "AIM: OFF"
+            MobileAimBtn.TextColor3 = CombatState.Enabled and Color3.fromRGB(120, 255, 150) or Color3.fromRGB(255, 120, 120)
+            MobileAimStroke.Color = CombatState.Enabled and Color3.fromRGB(80, 220, 120) or Color3.fromRGB(220, 80, 80)
             Notify("Aim Lock", CombatState.Enabled)
         elseif input.KeyCode == MovementState.FlyBind then
             MovementState.FlyEnabled = not MovementState.FlyEnabled
