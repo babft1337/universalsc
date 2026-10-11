@@ -1,5 +1,5 @@
 -- language: Luau, environment: Roblox Executor, target: Roblox Client
--- br??univ | Suite with Anti Fall Damage, Mobile Aim, Reversible Boost FPS & Notifications
+-- br??univ | Suite with Fixed Anti Fall Damage, Mobile Aim, Reversible Boost FPS & Notifications
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -1053,7 +1053,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 --------------------------------------------------
--- MOVEMENT PHYSICS LOOP & ANTI FALL DAMAGE
+-- MOVEMENT PHYSICS LOOP & ANTI FALL DAMAGE TRICK
 --------------------------------------------------
 RunService.Stepped:Connect(function()
     local myChar = LocalPlayer.Character
@@ -1079,16 +1079,17 @@ RunService.Stepped:Connect(function()
         end
     end
 
-    -- Anti Fall Damage Logic
-    if MovementState.AntiFallDamage and hrp then
+    -- Fixed Anti Fall Damage (Micro-velocity reset & state change near ground)
+    if MovementState.AntiFallDamage and hrp and hum then
         local velY = hrp.Velocity.Y
-        if velY < -50 then
+        if velY < -25 then
             local rayParams = RaycastParams.new()
             rayParams.FilterType = Enum.RaycastFilterType.Exclude
             rayParams.FilterDescendantsInstances = {myChar}
-            local result = workspace:Raycast(hrp.Position, Vector3.new(0, -8, 0), rayParams)
+            local result = workspace:Raycast(hrp.Position, Vector3.new(0, -14, 0), rayParams)
             if result then
-                hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
+                hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, 0, hrp.AssemblyLinearVelocity.Z)
+                hum:ChangeState(Enum.HumanoidStateType.Running)
             end
         end
     end
