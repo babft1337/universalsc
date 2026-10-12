@@ -1,5 +1,5 @@
 -- language: Luau, environment: Roblox Executor, target: Roblox Client
--- br??univ | Universal Suite with Lag Switch (Ghost Position) & Auto Strafe
+-- br??univ | Universal Suite with Fixed Auto Strafe Bind & Bypass
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -56,9 +56,7 @@ local MovementState = {
     FlySpeedValue = 50,
     NoClipEnabled = false,
     AntiFallDamage = false,
-    AutoStrafeEnabled = false,
-    LagSwitchEnabled = false,
-    LagSwitchMode = "Toggle"
+    AutoStrafeEnabled = false
 }
 
 local PerformanceState = {
@@ -74,7 +72,6 @@ local Binds = {
     NoClip = Enum.KeyCode.Unknown,
     AntiFallDamage = Enum.KeyCode.Unknown,
     AutoStrafe = Enum.KeyCode.Unknown,
-    LagSwitch = Enum.KeyCode.Unknown,
     BoostFPS = Enum.KeyCode.Unknown,
     MiniUI = Enum.KeyCode.Unknown,
     MenuGUI = Enum.KeyCode.K
@@ -87,10 +84,6 @@ local ChamsHighlights = {}
 local ChinaHatPart = nil
 local FlyKeys = {}
 local OriginalPartsData = {}
-
--- Lag Switch runtime variables
-local LagSwitchClone = nil
-local LagSwitchSavedCFrame = nil
 
 local OriginalLighting = {
     Brightness = Lighting.Brightness,
@@ -295,7 +288,6 @@ local function UpdateArrayList()
         {Name = "NoClip", Active = MovementState.NoClipEnabled},
         {Name = "Anti Fall Damage", Active = MovementState.AntiFallDamage},
         {Name = "Auto Strafe", Active = MovementState.AutoStrafeEnabled},
-        {Name = "Lag Switch", Active = MovementState.LagSwitchEnabled},
         {Name = "Boost FPS", Active = ESPState.BoostFPS},
         {Name = "Mini UI", Active = PerformanceState.MiniUIEnabled}
     }
@@ -1260,77 +1252,6 @@ AddToggle(MovementPage, "Auto Strafe", MovementState.AutoStrafeEnabled, function
     MovementState.AutoStrafeEnabled = v
 end, "AutoStrafe")
 
--- LAG SWITCH (GHOST POSITION) TOGGLE & MODE
-local function TriggerLagSwitch(v)
-    MovementState.LagSwitchEnabled = v
-    local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-    if v then
-        if hrp then
-            LagSwitchSavedCFrame = hrp.CFrame
-            if LagSwitchClone then LagSwitchClone:Destroy() end
-            
-            char.Archivable = true
-            LagSwitchClone = char:Clone()
-            LagSwitchClone.Name = "LagSwitchGhost"
-            LagSwitchClone.Parent = workspace
-            
-            for _, obj in ipairs(LagSwitchClone:GetDescendants()) do
-                if obj:IsA("BasePart") then
-                    obj.Anchored = true
-                    obj.CanCollide = false
-                    obj.Transparency = 0.5
-                    obj.Material = Enum.Material.Glass
-                    obj.Color = Color3.fromRGB(240, 240, 240)
-                elseif obj:IsA("Script") or obj:IsA("LocalScript") then
-                    obj:Destroy()
-                end
-            end
-            Notify("teleport successful", true)
-        end
-    else
-        if hrp and LagSwitchSavedCFrame then
-            hrp.CFrame = LagSwitchSavedCFrame
-            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            Notify("teleport successful", true)
-        else
-            Notify("teleport cancel", false)
-        end
-        if LagSwitchClone then
-            LagSwitchClone:Destroy()
-            LagSwitchClone = nil
-        end
-        LagSwitchSavedCFrame = nil
-    end
-end
-
-AddToggle(MovementPage, "Lag Switch", MovementState.LagSwitchEnabled, function(v)
-    TriggerLagSwitch(v)
-end, "LagSwitch")
-
-local LagSwitchModeBtn = Instance.new("TextButton")
-LagSwitchModeBtn.Size = UDim2.new(1, 0, 0, 32)
-LagSwitchModeBtn.BackgroundColor3 = isDarkTheme and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(225, 225, 225)
-LagSwitchModeBtn.BorderSizePixel = 0
-LagSwitchModeBtn.Text = "  Lag Switch Mode: [ TOGGLE ]"
-LagSwitchModeBtn.TextColor3 = isDarkTheme and Color3.fromRGB(200, 200, 200) or Color3.fromRGB(30, 30, 30)
-LagSwitchModeBtn.Font = Enum.Font.Gotham
-LagSwitchModeBtn.TextSize = 12
-LagSwitchModeBtn.TextXAlignment = Enum.TextXAlignment.Left
-LagSwitchModeBtn.Parent = MovementPage
-
-LagSwitchModeBtn.MouseButton1Click:Connect(function()
-    if MovementState.LagSwitchMode == "Toggle" then
-        MovementState.LagSwitchMode = "Hold"
-        LagSwitchModeBtn.Text = "  Lag Switch Mode: [ HOLD ]"
-    else
-        MovementState.LagSwitchMode = "Toggle"
-        LagSwitchModeBtn.Text = "  Lag Switch Mode: [ TOGGLE ]"
-    end
-    Notify("Lag Switch Mode", MovementState.LagSwitchMode)
-end)
-
 -- 4. ESP TAB
 AddToggle(ESPPage, "Team Check", ESPState.TeamCheck, function(v) ESPState.TeamCheck = v end)
 AddToggle(ESPPage, "Colour Team ESP", ESPState.ColorTeam, function(v) 
@@ -1487,7 +1408,6 @@ AddBindRow(BindsPage, "Fly", "Fly")
 AddBindRow(BindsPage, "NoClip", "NoClip")
 AddBindRow(BindsPage, "Anti Fall Damage", "AntiFallDamage")
 AddBindRow(BindsPage, "Auto Strafe", "AutoStrafe")
-AddBindRow(BindsPage, "Lag Switch", "LagSwitch")
 AddBindRow(BindsPage, "Boost FPS", "BoostFPS")
 AddBindRow(BindsPage, "Mini UI", "MiniUI")
 
@@ -1585,16 +1505,6 @@ UIS.InputBegan:Connect(function(input, gpe)
                 if FeatureRegistry["AutoStrafe"] then
                     FeatureRegistry["AutoStrafe"].Set(not FeatureRegistry["AutoStrafe"].Get())
                 end
-            elseif key == Binds.LagSwitch then
-                if MovementState.LagSwitchMode == "Toggle" then
-                    if FeatureRegistry["LagSwitch"] then
-                        FeatureRegistry["LagSwitch"].Set(not FeatureRegistry["LagSwitch"].Get())
-                    end
-                elseif MovementState.LagSwitchMode == "Hold" then
-                    if FeatureRegistry["LagSwitch"] then
-                        FeatureRegistry["LagSwitch"].Set(true)
-                    end
-                end
             elseif key == Binds.BoostFPS then
                 if FeatureRegistry["BoostFPS"] then
                     FeatureRegistry["BoostFPS"].Set(not FeatureRegistry["BoostFPS"].Get())
@@ -1614,11 +1524,6 @@ UIS.InputEnded:Connect(function(input)
         if input.KeyCode == Binds.AimLock and CombatState.Mode == "Hold" then
             if FeatureRegistry["AimLock"] then
                 FeatureRegistry["AimLock"].Set(false)
-            end
-        end
-        if input.KeyCode == Binds.LagSwitch and MovementState.LagSwitchMode == "Hold" then
-            if FeatureRegistry["LagSwitch"] then
-                FeatureRegistry["LagSwitch"].Set(false)
             end
         end
     end
@@ -1728,7 +1633,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 --------------------------------------------------
--- MOVEMENT PHYSICS LOOP (WITH WALK SPEED BYPASS, AUTO STRAFE & LAG SWITCH)
+-- MOVEMENT PHYSICS LOOP (WITH WALK SPEED BYPASS & AUTO STRAFE)
 --------------------------------------------------
 RunService.Stepped:Connect(function()
     local myChar = LocalPlayer.Character
@@ -1740,6 +1645,7 @@ RunService.Stepped:Connect(function()
         if MovementState.WalkSpeedEnabled then
             hum.WalkSpeed = MovementState.WalkSpeedValue
             
+            -- Walk Speed Bypass (Hook/Anti-clamp mechanism for strict games)
             if MovementState.WalkSpeedBypass then
                 pcall(function()
                     if hum.WalkSpeed ~= MovementState.WalkSpeedValue then
@@ -1777,7 +1683,7 @@ RunService.Stepped:Connect(function()
         end
     end
 
-    -- AUTO STRAFE LOGIC
+    -- AUTO STRAFE LOGIC (Air momentum & direction control)
     if MovementState.AutoStrafeEnabled and hrp and hum then
         if hum:GetState() == Enum.HumanoidStateType.Freefall or hum:GetState() == Enum.HumanoidStateType.Jumping then
             local cameraCFrame = Camera.CFrame
