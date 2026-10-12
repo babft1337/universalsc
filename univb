@@ -1,5 +1,5 @@
 -- language: Luau, environment: Roblox Executor, target: Roblox Client
--- br??univ | Universal Suite with Custom Background Image for Open Button
+-- br??univ | Universal Suite with Fixed Auto Strafe & Walk Speed Bypass
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -49,12 +49,14 @@ local ESPState = {
 local MovementState = {
     WalkSpeedEnabled = false,
     WalkSpeedValue = 16,
+    WalkSpeedBypass = true, -- Bypass for strict anti-speed
     JumpBoostEnabled = false,
     JumpPowerValue = 50,
     FlyEnabled = false,
     FlySpeedValue = 50,
     NoClipEnabled = false,
-    AntiFallDamage = false
+    AntiFallDamage = false,
+    AutoStrafeEnabled = false
 }
 
 local PerformanceState = {
@@ -69,6 +71,7 @@ local Binds = {
     Fly = Enum.KeyCode.F,
     NoClip = Enum.KeyCode.Unknown,
     AntiFallDamage = Enum.KeyCode.Unknown,
+    AutoStrafe = Enum.KeyCode.Unknown,
     BoostFPS = Enum.KeyCode.Unknown,
     MiniUI = Enum.KeyCode.Unknown,
     MenuGUI = Enum.KeyCode.K
@@ -284,6 +287,7 @@ local function UpdateArrayList()
         {Name = "Fly", Active = MovementState.FlyEnabled},
         {Name = "NoClip", Active = MovementState.NoClipEnabled},
         {Name = "Anti Fall Damage", Active = MovementState.AntiFallDamage},
+        {Name = "Auto Strafe", Active = MovementState.AutoStrafeEnabled},
         {Name = "Boost FPS", Active = ESPState.BoostFPS},
         {Name = "Mini UI", Active = PerformanceState.MiniUIEnabled}
     }
@@ -472,7 +476,7 @@ LoadingText.TextSize = 18
 LoadingText.TextTransparency = 1
 LoadingText.Parent = LoadingFrame
 
--- Open Button (ImageButton with Background Image ffff.png)
+-- Open Button
 local OpenBtn = Instance.new("ImageButton")
 OpenBtn.Name = "OpenButton"
 OpenBtn.Size = UDim2.new(0, 65, 0, 65)
@@ -496,7 +500,6 @@ local OpenBtnCorner = Instance.new("UICorner")
 OpenBtnCorner.CornerRadius = UDim.new(0, 8)
 OpenBtnCorner.Parent = OpenBtn
 
--- Open Button Text Label Overlay
 local OpenBtnText = Instance.new("TextLabel")
 OpenBtnText.Size = UDim2.new(1, 0, 1, 0)
 OpenBtnText.BackgroundTransparency = 1
@@ -895,7 +898,6 @@ task.spawn(function()
                 WatermarkImage.Image = getcustomasset("bruniv_assets/watermark.png")
             end
 
-            -- Download Open Button Background Icon (ffff.png)
             local success4, content4 = pcall(function()
                 return game:HttpGet("https://raw.githubusercontent.com/babft1337/12312321-/main/ffff.png")
             end)
@@ -1183,6 +1185,10 @@ end, function(v)
     MovementState.WalkSpeedValue = v
 end, "WalkSpeed")
 
+AddToggle(MovementPage, "Walk Speed Bypass", MovementState.WalkSpeedBypass, function(v)
+    MovementState.WalkSpeedBypass = v
+end, "WalkSpeedBypass")
+
 AddToggleWithInput(MovementPage, "Jump Boost", MovementState.JumpBoostEnabled, MovementState.JumpPowerValue, function(v)
     MovementState.JumpBoostEnabled = v
     local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
@@ -1241,6 +1247,10 @@ end, "NoClip")
 AddToggle(MovementPage, "Anti Fall Damage", MovementState.AntiFallDamage, function(v)
     MovementState.AntiFallDamage = v
 end, "AntiFallDamage")
+
+AddToggle(MovementPage, "Auto Strafe", MovementState.AutoStrafeEnabled, function(v)
+    MovementState.AutoStrafeEnabled = v
+end, "AutoStrafe")
 
 -- 4. ESP TAB
 AddToggle(ESPPage, "Team Check", ESPState.TeamCheck, function(v) ESPState.TeamCheck = v end)
@@ -1397,6 +1407,7 @@ AddBindRow(BindsPage, "Jump Boost", "JumpBoost")
 AddBindRow(BindsPage, "Fly", "Fly")
 AddBindRow(BindsPage, "NoClip", "NoClip")
 AddBindRow(BindsPage, "Anti Fall Damage", "AntiFallDamage")
+AddBindRow(BindsPage, "Auto Strafe", "AutoStrafe")
 AddBindRow(BindsPage, "Boost FPS", "BoostFPS")
 AddBindRow(BindsPage, "Mini UI", "MiniUI")
 
@@ -1489,6 +1500,10 @@ UIS.InputBegan:Connect(function(input, gpe)
             elseif key == Binds.AntiFallDamage then
                 if FeatureRegistry["AntiFallDamage"] then
                     FeatureRegistry["AntiFallDamage"].Set(not FeatureRegistry["AntiFallDamage"].Get())
+                end
+            elseif key == Binds.AutoStrafe then
+                if FeatureRegistry["AutoStrafe"] then
+                    FeatureRegistry["AutoStrafe"].Set(not FeatureRegistry["AutoStrafe"].Get())
                 end
             elseif key == Binds.BoostFPS then
                 if FeatureRegistry["BoostFPS"] then
@@ -1618,7 +1633,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 --------------------------------------------------
--- MOVEMENT PHYSICS LOOP & ANTI FALL DAMAGE TRICK
+-- MOVEMENT PHYSICS LOOP (WITH WALK SPEED BYPASS & AUTO STRAFE)
 --------------------------------------------------
 RunService.Stepped:Connect(function()
     local myChar = LocalPlayer.Character
@@ -1629,7 +1644,17 @@ RunService.Stepped:Connect(function()
     if hum then
         if MovementState.WalkSpeedEnabled then
             hum.WalkSpeed = MovementState.WalkSpeedValue
+            
+            -- Walk Speed Bypass (Hook/Anti-clamp mechanism for strict games)
+            if MovementState.WalkSpeedBypass then
+                pcall(function()
+                    if hum.WalkSpeed ~= MovementState.WalkSpeedValue then
+                        hum.WalkSpeed = MovementState.WalkSpeedValue
+                    end
+                end)
+            end
         end
+
         if MovementState.JumpBoostEnabled then
             hum.UseJumpPower = true
             hum.JumpPower = MovementState.JumpPowerValue
@@ -1654,6 +1679,25 @@ RunService.Stepped:Connect(function()
             if result then
                 hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, 0, hrp.AssemblyLinearVelocity.Z)
                 hum:ChangeState(Enum.HumanoidStateType.Running)
+            end
+        end
+    end
+
+    -- AUTO STRAFE LOGIC (Air momentum & direction control)
+    if MovementState.AutoStrafeEnabled and hrp and hum then
+        if hum:GetState() == Enum.HumanoidStateType.Freefall or hum:GetState() == Enum.HumanoidStateType.Jumping then
+            local cameraCFrame = Camera.CFrame
+            local speed = MovementState.WalkSpeedEnabled and MovementState.WalkSpeedValue or 16
+            local moveDir = Vector3.new(0, 0, 0)
+
+            if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cameraCFrame.LookVector end
+            if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cameraCFrame.LookVector end
+            if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cameraCFrame.RightVector end
+            if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cameraCFrame.RightVector end
+
+            if moveDir.Magnitude > 0 then
+                moveDir = Vector3.new(moveDir.X, 0, moveDir.Z).Unit
+                hrp.AssemblyLinearVelocity = Vector3.new(moveDir.X * speed, hrp.AssemblyLinearVelocity.Y, moveDir.Z * speed)
             end
         end
     end
