@@ -1,5 +1,5 @@
 -- language: Luau, environment: Roblox Executor, target: Roblox Client
--- br??univ | Universal Suite with Fullscreen Dark Keybind Prompt
+-- br??univ | Universal Suite with Custom Background Image for Open Button
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -472,20 +472,17 @@ LoadingText.TextSize = 18
 LoadingText.TextTransparency = 1
 LoadingText.Parent = LoadingFrame
 
--- Open Button
-local OpenBtn = Instance.new("TextButton")
+-- Open Button (ImageButton with Background Image ffff.png)
+local OpenBtn = Instance.new("ImageButton")
 OpenBtn.Name = "OpenButton"
 OpenBtn.Size = UDim2.new(0, 65, 0, 65)
 OpenBtn.Position = UDim2.new(0, 15, 0.4, 0)
 OpenBtn.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
 OpenBtn.BorderSizePixel = 0
-OpenBtn.Text = "OPEN"
-OpenBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
-OpenBtn.Font = Enum.Font.GothamBold
-OpenBtn.TextSize = 12
+OpenBtn.ScaleType = Enum.ScaleType.Stretch
 OpenBtn.Active = true
 OpenBtn.BackgroundTransparency = 1
-OpenBtn.TextTransparency = 1
+OpenBtn.ImageTransparency = 1
 OpenBtn.Parent = ScreenGui
 MakeDraggable(OpenBtn)
 
@@ -498,6 +495,18 @@ OpenBtnStroke.Parent = OpenBtn
 local OpenBtnCorner = Instance.new("UICorner")
 OpenBtnCorner.CornerRadius = UDim.new(0, 8)
 OpenBtnCorner.Parent = OpenBtn
+
+-- Open Button Text Label Overlay
+local OpenBtnText = Instance.new("TextLabel")
+OpenBtnText.Size = UDim2.new(1, 0, 1, 0)
+OpenBtnText.BackgroundTransparency = 1
+OpenBtnText.Text = "OPEN"
+OpenBtnText.TextColor3 = Color3.fromRGB(240, 240, 240)
+OpenBtnText.Font = Enum.Font.GothamBold
+OpenBtnText.TextSize = 12
+OpenBtnText.TextTransparency = 1
+OpenBtnText.ZIndex = 2
+OpenBtnText.Parent = OpenBtn
 
 -- Main Frame
 local MainFrame = Instance.new("Frame")
@@ -787,8 +796,8 @@ local function ApplyTheme()
     TweenService:Create(MiniTitle, TweenInfo.new(0.35), {TextColor3 = floatingText}):Play()
     TweenService:Create(MiniStatsLabel, TweenInfo.new(0.35), {TextColor3 = floatingSubText}):Play()
 
-    TweenService:Create(OpenBtn, TweenInfo.new(0.35), {BackgroundColor3 = floatingBg, TextColor3 = floatingText}):Play()
     TweenService:Create(OpenBtnStroke, TweenInfo.new(0.35), {Color = strokeCol}):Play()
+    TweenService:Create(OpenBtnText, TweenInfo.new(0.35), {TextColor3 = floatingText}):Play()
 
     TweenService:Create(MobileAimBtn, TweenInfo.new(0.35), {BackgroundColor3 = floatingBg, TextColor3 = floatingText}):Play()
     TweenService:Create(MobileAimStroke, TweenInfo.new(0.35), {Color = strokeCol}):Play()
@@ -884,6 +893,15 @@ task.spawn(function()
             if success3 and content3 then
                 writefile("bruniv_assets/watermark.png", content3)
                 WatermarkImage.Image = getcustomasset("bruniv_assets/watermark.png")
+            end
+
+            -- Download Open Button Background Icon (ffff.png)
+            local success4, content4 = pcall(function()
+                return game:HttpGet("https://raw.githubusercontent.com/babft1337/12312321-/main/ffff.png")
+            end)
+            if success4 and content4 then
+                writefile("bruniv_assets/open_bg.png", content4)
+                OpenBtn.Image = getcustomasset("bruniv_assets/open_bg.png")
             end
         end
     end)
@@ -1402,7 +1420,7 @@ InfoLabel.Parent = SettingsPage
 --------------------------------------------------
 local function ToggleMenu()
     MainFrame.Visible = not MainFrame.Visible
-    OpenBtn.Text = MainFrame.Visible and "CLOSE" or "OPEN"
+    OpenBtnText.Text = MainFrame.Visible and "CLOSE" or "OPEN"
 end
 
 OpenBtn.MouseButton1Click:Connect(ToggleMenu)
@@ -1524,7 +1542,8 @@ task.spawn(function()
         TweenService:Create(TabBar, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundTransparency = 0}):Play()
         TweenService:Create(ContentContainer, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundTransparency = 0}):Play()
 
-        TweenService:Create(OpenBtn, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundTransparency = 0, TextTransparency = 0}):Play()
+        TweenService:Create(OpenBtn, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {ImageTransparency = 0}):Play()
+        TweenService:Create(OpenBtnText, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
         TweenService:Create(OpenBtnStroke, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Transparency = 0}):Play()
 
         Notify("br??univ Loaded", true)
